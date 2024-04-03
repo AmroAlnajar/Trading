@@ -12,29 +12,22 @@
 CPositionInfo position;
 CTrade Trading;
 
-int input shortMaPeriod = 5; // Short MA
-int input longMaPeriod = 8;  // Long MA
+input int shortMaPeriod = 5; // Short MA
+input int longMaPeriod = 8;  // Long MA
+input int startHour = 00; //start hour
+input int endHour = 23; //stop hour
+input double trailingStop = 150;  
+input double targetProfit = 150;
+input double initialLotSize = 0.1;
+input double incrementalLotSize = 0.1;
 
 double inpStopLoss = 50;
 double inpTakeProfit = 100;
-
-int input startHour = 00; //start hour
-int input endHour = 23; //stop hour
-double input trailingStop = 150;  
-
 double ema8[],ema14[];
-
 datetime lastCandleCloseTime = 0;
-
 double totalProfitLoss = 0;
-double input initialLotSize = 0.1;
-double input incrementalLotSize = 0.1;
-
 double dynamicLotSize = 0.1;
 double initialAccountBalance = 0;
-
-double input targetProfit = 150;
-
 bool tradeActive = true;
 
 int OnInit() {
@@ -48,9 +41,7 @@ void OnTrade(void)
   
       if(position.Profit() > 0){
          dynamicLotSize = initialLotSize;
-      
       }
-   
   }
 
 void OnTick() {
@@ -58,7 +49,6 @@ void OnTick() {
       if(tradeActive == true)
       {
          ExecuteTradingLogic();
-         ExecuteTrailingLogic();
       }     
 
 
@@ -69,8 +59,11 @@ void OnTick() {
             ulong ticketNr = PositionGetTicket(i);
             Trading.PositionClose(ticketNr);
          }
+         
          tradeActive = false;
       }
+      
+      ExecuteTrailingLogic();
 }
 
 void OnTimer() {
@@ -190,7 +183,6 @@ void ExecuteTrailingLogic()
       }
    }
 }
-
 
 void ExecuteBreakEvenLogic() {
 
