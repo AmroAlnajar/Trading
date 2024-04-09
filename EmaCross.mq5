@@ -12,21 +12,24 @@
 CPositionInfo position;
 CTrade Trading;
 
-input int shortMaPeriod = 5; // Short MA
-input int longMaPeriod = 8;  // Long MA
+input int shortMaPeriod = 9; // Short EMA
+input int longMaPeriod = 21;  // Long EMA
 input int startHour = 00; //start hour
 input int endHour = 23; //stop hour
 input double trailingStop = 150;  
-input double targetProfit = 150;
+input double targetProfit = 6000;
 input double initialLotSize = 0.1;
 input double incrementalLotSize = 0.1;
+input double breakEvenAt = 600;
+input bool enableTakeProfit = false;
+input bool enableStopLoss = false;
+input double inpStopLoss = 200;
+input double inpTakeProfit = 200;
 
-double inpStopLoss = 50;
-double inpTakeProfit = 100;
 double ema8[],ema14[];
 datetime lastCandleCloseTime = 0;
 double totalProfitLoss = 0;
-double dynamicLotSize = 0.1;
+double dynamicLotSize = initialLotSize;
 double initialAccountBalance = 0;
 bool tradeActive = true;
 
@@ -39,12 +42,17 @@ int OnInit() {
 void OnTrade(void)
   {
   
-      if(position.Profit() > 0){
+      if(position.Profit() >= 0){
          dynamicLotSize = initialLotSize;
       }
   }
 
-void OnTick() {
+void OnTick() {     
+      
+      if(IsNewDay()) {
+         tradeActive = true;
+         initialAccountBalance = AccountInfoDouble(ACCOUNT_EQUITY);
+      }
 
       if(tradeActive == true)
       {
@@ -61,9 +69,9 @@ void OnTick() {
          }
          
          tradeActive = false;
-      }
+      } 
       
-      ExecuteTrailingLogic();
+      ExecuteBreakEvenLogic();
 }
 
 void OnTimer() {
@@ -103,15 +111,15 @@ void ExecuteTradingLogic()
    
       if(isBuySignal() && PositionsTotal() < 1) {
       
-            double sl = 0;//Ask - inpStopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-            double tp = 0;//Ask + inpTakeProfit * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+            double sl = enableStopLoss == true ? Ask - inpStopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT) : 0;
+            double tp = enableTakeProfit == true ? Ask + inpTakeProfit * SymbolInfoDouble(_Symbol, SYMBOL_POINT): 0;
             Trading.PositionOpen(_Symbol, ORDER_TYPE_BUY, dynamicLotSize, Ask,sl,tp,"CROSS EA BUY");
             dynamicLotSize += incrementalLotSize;
       }
 
       if(isSellSignal() && PositionsTotal() < 1) {
-            double sl = 0;//Bid + inpStopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-            double tp = 0; //Bid - inpTakeProfit * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+            double sl = enableStopLoss == true ? Bid + inpStopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT) : 0;
+            double tp = enableTakeProfit == true ? Bid - inpTakeProfit * SymbolInfoDouble(_Symbol, SYMBOL_POINT): 0;
             Trading.PositionOpen(_Symbol, ORDER_TYPE_SELL, dynamicLotSize, Bid, sl,tp,"CROSS EA SELL");
             dynamicLotSize+=incrementalLotSize;                      
       }
@@ -206,18 +214,16 @@ void ExecuteBreakEvenLogic() {
             
             double profitBuy = NormalizeDouble((SymbolInfoDouble(_Symbol, SYMBOL_BID)-PositionGetDouble(POSITION_PRICE_OPEN)) / SymbolInfoDouble(_Symbol, SYMBOL_POINT), 0);
 
-            if(profitBuy >= 50) {
-               Print("Setting the SL to price open, current progress in points:", tpInPoints/2);
-               Trading.PositionModify(ticketNr, PositionGetDouble(POSITION_PRICE_OPEN), originalTp);
+            if(profitBuy >= breakEvenAt) {
+               Trading.PositionModify(ticketNr, PositionGetDouble(POSITION_PRICE_OPEN) + 20 * Point(), originalTp);
             }
          }
          else if (PositionType == POSITION_TYPE_SELL) {   
          
             double profitSell = NormalizeDouble((PositionGetDouble(POSITION_PRICE_OPEN)-SymbolInfoDouble(_Symbol, SYMBOL_ASK)) / SymbolInfoDouble(_Symbol, SYMBOL_POINT), 0);
 
-            if(profitSell >= 50) {
-               Print("Setting the SL to price open, current progress in points:", tpInPoints/2);
-               Trading.PositionModify(ticketNr, PositionGetDouble(POSITION_PRICE_OPEN), originalTp);
+            if(profitSell >= breakEvenAt) {
+               Trading.PositionModify(ticketNr, PositionGetDouble(POSITION_PRICE_OPEN) - 20*Point(), originalTp);
             }
          }
       }
@@ -225,3 +231,17 @@ void ExecuteBreakEvenLogic() {
 
 
 }
+
+ bool IsNewDay() {
+   MqlDateTime time;
+   TimeToStruct(TimeCurrent(), time);
+   static int Dateprev = 0;
+   int Datenow = time.day;
+   
+   if(Dateprev!= Datenow) {
+      Dateprev = Datenow;
+      return true;
+   }
+   
+   return false;
+ }
